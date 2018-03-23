@@ -26,11 +26,13 @@ opts.bboxReg = true;
 opts.skipLRMult = [1, 0.001, 0.0001, 0.00001];
 opts.sampleSize = 256;
 opts.posFraction = 0.5;
-opts.posThresh = 0.7;
+opts.posThresh = 0.7; % TODO: can change
 opts.negThresh = 0.3;
 opts.border = [0, 0];
 opts.pretrainModelPath = 'matconvnet/pascal-fcn8s-tvg-dag.mat';
-opts.dataDir = fullfile('data','widerface') ;
+% opts.dataDir = fullfile('data','widerface') ;
+%opts.dataDir = fullfile('data', 'eu_plates');
+opts.dataDir = fullfile('data', 'plates');
 opts.modelType = 'pascal-fcn8s-tvg-dag' ;
 opts.networkType = 'dagnn' ;
 opts.batchNormalization = true ;
@@ -56,7 +58,8 @@ if ~isempty(opts.clusterName)
     sfx = [sfx '-' 'cluster-' opts.clusterName]; 
 end
 
-opts.expDir = fullfile('models', ['widerface-' sfx]) ;
+%opts.expDir = fullfile('models', ['widerface-' sfx]) ;
+opts.expDir = fullfile('models', ['dl-' sfx]) ;
 if ~isempty(opts.tag)
     opts.expDir = [opts.expDir '-' opts.tag];
 end
@@ -125,28 +128,13 @@ end
 %% save model options
 optpath = fullfile(opts.expDir, 'opts.mat');
 if ~exist(optpath), save(optpath, 'opts'); end
-
+train = find(imdb.images.set == 1) 
 
 %% define batch getter function
 %batchGetter = @cnn_get_batch_logistic_zoom;
 if ~isempty(opts.batchGetterFn)
     batchGetter = str2func(opts.batchGetterFn);
 end
-
-%% compute image stats
-imageStatsPath = fullfile(opts.dataDir, 'imageStats.mat') ;
-if exist(imageStatsPath)
-    load(imageStatsPath, 'averageImage', 'rgbMean', 'rgbCovariance') ;
-else
-    [averageImage, rgbMean, rgbCovariance] = getImageStats(batchGetter, ...
-                                                      opts, net.meta, imdb) ;
-    save(imageStatsPath, 'averageImage', 'rgbMean', 'rgbCovariance') ;
-end
-net.meta.augmentation.transformation = 'f5';
-net.meta.normalization.averageImage = rgbMean ;
-[v,d] = eig(rgbCovariance) ;
-net.meta.augmentation.rgbVariance = 0.1*sqrt(d)*v' ;
-clear v d ;
 
 %% clustering
 minh = opts.minClusterSize(1); minw = opts.minClusterSize(2);
@@ -174,6 +162,21 @@ else
   load(clusterPath);
 end
 net.meta.clusters = clusters;
+
+%% compute image stats
+imageStatsPath = fullfile(opts.dataDir, 'imageStats.mat') ;
+if exist(imageStatsPath)
+    load(imageStatsPath, 'averageImage', 'rgbMean', 'rgbCovariance') ;
+else
+    [averageImage, rgbMean, rgbCovariance] = getImageStats(batchGetter, ...
+                                                      opts, net.meta, imdb) ;
+    save(imageStatsPath, 'averageImage', 'rgbMean', 'rgbCovariance') ;
+end
+net.meta.augmentation.transformation = 'f5';
+net.meta.normalization.averageImage = rgbMean ;
+[v,d] = eig(rgbCovariance) ;
+net.meta.augmentation.rgbVariance = 0.1*sqrt(d)*v' ;
+clear v d ;
 
 %% add predictors/losses
 switch opts.modelType
@@ -249,7 +252,7 @@ imagePaths = strcat([imdb.imageDir filesep], imdb.images.name(batch)) ;
 imageSizes = imdb.images.size(batch, :);
 %isVal = ~isempty(batch) && imdb.images.set(batch(1)) ~= 1 ;
 isVal = 0;
-if isfield(opts, 'clusters') && ~isVal 
+if isfield(opts, 'clusters') && ~isVal % TODO: can not go here when getImageStats
     labelRects = imdb.labels.rects(batch);
 else
     labelRects = [];
@@ -277,8 +280,10 @@ end
 function [averageImage, rgbMean, rgbCovariance] = ...
     getImageStats(batchGetter, opts, meta, imdb)
 train = find(imdb.images.set == 1) ;
-train = train(1: 101: end);
-bs = 256 ;
+%train = train(1: 101: end);
+%bs = 256 ;
+train = train(1:end);
+bs = 4;
 opts.networkType = 'dagnn' ;
 fn = getBatchFn(batchGetter, opts, meta) ;
 avg = {}; rgbm1 = {}; rgbm2 = {};

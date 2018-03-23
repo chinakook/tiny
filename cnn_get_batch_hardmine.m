@@ -29,7 +29,7 @@ opts.rfs = [];
 opts.lossType = [];
 opts.clusterType = [];
 opts.clusters = [];
-opts.posThresh = 0.7;
+opts.posThresh = 0.7; % TODO: can change
 opts.negThresh = 0.3;
 opts.var2idx = [];
 opts.varsizes = []; 
@@ -99,7 +99,7 @@ if fetch
       img = imageCells{i};
     end
     if size(img,3) == 1
-      img = cat(3, img, img, img) ;
+          img = cat(3, img, img, img) ;
     end
 
     % crop image
@@ -109,6 +109,47 @@ if fetch
     crop_x2 = min(imageSize(2), crop_x1+inputSize(2)-1);
     crop_h = crop_y2-crop_y1+1;
     crop_w = crop_x2-crop_x1+1;
+    
+    trial = 8;
+    for t = 1:trial
+        crop_y1 = randi([1 max(1, imageSize(1)+1-inputSize(1))]);
+        crop_x1 = randi([1 max(1, imageSize(2)+1-inputSize(2))]);
+        crop_y2 = min(imageSize(1), crop_y1+inputSize(1)-1);
+        crop_x2 = min(imageSize(2), crop_x1+inputSize(2)-1);
+        crop_h = crop_y2-crop_y1+1;
+        crop_w = crop_x2-crop_x1+1;
+        
+        none_inter = 1;
+        for r = 1: size(labelRect,1)
+            r_x1 = int32(labelRect(r,1));
+            r_y1 = int32(labelRect(r,2));
+            r_x2 = int32(labelRect(r,3));
+            r_y2 = int32(labelRect(r,4));
+            r_w = r_x2 - r_x1 + 1;
+            r_h = r_y2 - r_y1 + 1;
+            r_area = r_w * r_h;
+            inter_area = rectint([crop_x1, crop_y1, crop_w, crop_h], [r_x1, r_y1, r_w, r_h]);
+            if inter_area < 0.95 * r_area && inter_area > 0
+                none_inter = 0;
+                break;
+            end    
+        end
+
+        if none_inter == 1
+            break;
+        end
+    end
+    
+%     r_x1 = int32(labelRect(1,1));
+%     r_y1 = int32(labelRect(1,2));
+%     r_x2 = int32(labelRect(1,3));
+%     r_y2 = int32(labelRect(1,4));
+%     crop_y1 = randi([max(1,r_y2 - inputSize(1)+1), r_y1]);
+%     crop_x1 = randi([max(1,r_x2 - inputSize(2)+1), r_x1]);
+%     crop_y2 = min(imageSize(1), crop_y1+inputSize(1)-1);
+%     crop_x2 = min(imageSize(2), crop_x1+inputSize(2)-1);
+%     crop_h = crop_y2-crop_y1+1;
+%     crop_w = crop_x2-crop_x1+1;
     
     paste_y1 = randi([1, inputSize(1)-crop_h+1]);
     paste_x1 = randi([1, inputSize(2)-crop_w+1]);
@@ -438,6 +479,7 @@ for i=1:numel(imagePaths)
     gray = -ones(size(clsmap));
     gray(opts.negThresh <= best_iou & best_iou < opts.posThresh) = 0;
     clsmap = max(clsmap, gray);
+    % subplot(131), imagesc(images(:,:,1,1));subplot(132), imagesc(regmap(:,:,20));subplot(133), imagesc(clsmap(:,:,20));
   end
 
   % 0: boundary
